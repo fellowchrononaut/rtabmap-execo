@@ -223,7 +223,7 @@ class RTABMapApp : public UEventsHandler {
 
  private:
   int cameraDriver_;
-  rtabmap::CameraMobile * camera_;
+  rtabmap::Camera * camera_;
   rtabmap::SensorCaptureThread * sensorCaptureThread_;
   rtabmap::RtabmapThread * rtabmapThread_;
   rtabmap::Rtabmap * rtabmap_;

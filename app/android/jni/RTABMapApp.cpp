@@ -41,6 +41,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef RTABMAP_ARENGINE
 #include "CameraAREngine.h"
 #endif
+#ifdef RTABMAP_REALSENSE2
+#include <rtabmap/core/camera/CameraRealSense2.h>
+#endif
 
 #include <rtabmap/core/Rtabmap.h>
 #include <rtabmap/core/util2d.h>
@@ -391,9 +394,9 @@ void RTABMapApp::setScreenRotation(int displayRotation, int cameraRotation)
 	main_scene_.setScreenRotation(rotation);
 
 	boost::mutex::scoped_lock  lock(cameraMutex_);
-	if(camera_)
+	if(camera_ && cameraDriver_ <= 3)
 	{
-		camera_->setScreenRotationAndSize(main_scene_.getScreenRotation(), main_scene_.getViewPortWidth(), main_scene_.getViewPortHeight());
+		((rtabmap::CameraMobile*)camera_)->setScreenRotationAndSize(main_scene_.getScreenRotation(), main_scene_.getViewPortWidth(), main_scene_.getViewPortHeight());
 	}
 }
 
@@ -824,7 +827,10 @@ int RTABMapApp::openDatabase(const std::string & databasePath, bool databaseInMe
 		boost::mutex::scoped_lock  lock(cameraMutex_);
 		if(camera_)
         {
-            camera_->resetOrigin();
+            if(cameraDriver_ <= 3)
+            {
+                ((rtabmap::CameraMobile*)camera_)->resetOrigin();
+            }
             if(dataRecorderMode_)
             {
                 // Don't update faster than we record, so that we see is what is recorded
@@ -957,6 +963,7 @@ bool RTABMapApp::isBuiltWith(int cameraDriver) const
 		return false;
 #endif
 	}
+
 	return false;
 }
 
@@ -1014,6 +1021,14 @@ bool RTABMapApp::startCamera()
 	{
 		camera_ = new rtabmap::CameraMobile(upstreamRelocalizationMaxAcc_);
 	}
+	else if(cameraDriver_ == 4)
+	{
+#ifdef RTABMAP_REALSENSE2
+		camera_ = new rtabmap::CameraRealSense2();
+#else
+		UERROR("RTAB-Map is not built with RealSense2 support!");
+#endif
+	}
 
 	if(camera_ == 0)
 	{
@@ -1030,7 +1045,10 @@ bool RTABMapApp::startCamera()
 
 	if(camera_->init())
 	{
-		camera_->setScreenRotationAndSize(main_scene_.getScreenRotation(), main_scene_.getViewPortWidth(), main_scene_.getViewPortHeight());
+		if(cameraDriver_ <= 3)
+		{
+			((rtabmap::CameraMobile*)camera_)->setScreenRotationAndSize(main_scene_.getScreenRotation(), main_scene_.getViewPortWidth(), main_scene_.getViewPortHeight());
+		}
 
 		//update mesh decimation based on camera calibration
 		LOGI("Cloud density level %d", cloudDensityLevel_);
@@ -1067,7 +1085,10 @@ void RTABMapApp::stopCamera()
 		boost::mutex::scoped_lock  lock(cameraMutex_);
 		if(sensorCaptureThread_!=0)
 		{
-            camera_->close();
+            if(cameraDriver_ <= 3)
+            {
+                ((rtabmap::CameraMobile*)camera_)->close();
+            }
 			sensorCaptureThread_->join(true);
 			delete sensorCaptureThread_; // camera_ is closed and deleted inside
 			sensorCaptureThread_ = 0;
@@ -1205,9 +1226,9 @@ void RTABMapApp::SetViewPort(int width, int height)
 {
 	main_scene_.SetupViewPort(width, height);
 	boost::mutex::scoped_lock  lock(cameraMutex_);
-	if(camera_)
+	if(camera_ && cameraDriver_ <= 3)
 	{
-		camera_->setScreenRotationAndSize(main_scene_.getScreenRotation(), main_scene_.getViewPortWidth(), main_scene_.getViewPortHeight());
+		((rtabmap::CameraMobile*)camera_)->setScreenRotationAndSize(main_scene_.getScreenRotation(), main_scene_.getViewPortWidth(), main_scene_.getViewPortHeight());
 	}
 }
 
@@ -1389,46 +1410,50 @@ int RTABMapApp::Render()
 			{
 				if(cameraDriver_ <= 2)
 				{
-					camera_->updateOnRender();
+					((rtabmap::CameraMobile*)camera_)->updateOnRender();
 				}
 #ifdef DEBUG_RENDERING_PERFORMANCE
 				LOGD("Camera updateOnRender %fs", time.ticks());
 #endif
-                // We check if we are in measuring mode: not visualizing mesh or rtabmap is not started (localization mode)
-				if(main_scene_.background_renderer_ == 0 && camera_->getTextureId() != 0 && (!visualizingMesh_ || !(rtabmapThread_ == 0 || !rtabmapThread_->isRunning())))
+				if(cameraDriver_ <= 3)
 				{
-					main_scene_.background_renderer_ = new BackgroundRenderer();
-					main_scene_.background_renderer_->InitializeGlContent(((rtabmap::CameraMobile*)camera_)->getTextureId(), cameraDriver_ <= 2);
-				}
-				if(camera_->uvsInitialized())
-				{
-					uvsTransformed = ((rtabmap::CameraMobile*)camera_)->uvsTransformed();
-					((rtabmap::CameraMobile*)camera_)->getVPMatrices(arViewMatrix, arProjectionMatrix);
-					if(graphOptimization_ && !mapToOdom_.isIdentity())
+					rtabmap::CameraMobile * cameraMobile = (rtabmap::CameraMobile*)camera_;
+                    // We check if we are in measuring mode: not visualizing mesh or rtabmap is not started (localization mode)
+					if(main_scene_.background_renderer_ == 0 && cameraMobile->getTextureId() != 0 && (!visualizingMesh_ || !(rtabmapThread_ == 0 || !rtabmapThread_->isRunning())))
 					{
-						rtabmap::Transform mapCorrection = rtabmap::opengl_world_T_rtabmap_world * mapToOdom_ *rtabmap::rtabmap_world_T_opengl_world;
-						arViewMatrix = glm::inverse(rtabmap::glmFromTransform(mapCorrection)*glm::inverse(arViewMatrix));
+						main_scene_.background_renderer_ = new BackgroundRenderer();
+						main_scene_.background_renderer_->InitializeGlContent(cameraMobile->getTextureId(), cameraDriver_ <= 2);
 					}
-				}
-				if(!visualizingMesh_ && !dataRecorderMode_ && main_scene_.GetCameraType() == tango_gl::GestureCamera::kFirstPerson)
-				{
-					rtabmap::CameraModel occlusionModel;
-					cv::Mat occlusionImage = ((rtabmap::CameraMobile*)camera_)->getOcclusionImage(&occlusionModel);
+					if(cameraMobile->uvsInitialized())
+					{
+						uvsTransformed = cameraMobile->uvsTransformed();
+						cameraMobile->getVPMatrices(arViewMatrix, arProjectionMatrix);
+						if(graphOptimization_ && !mapToOdom_.isIdentity())
+						{
+							rtabmap::Transform mapCorrection = rtabmap::opengl_world_T_rtabmap_world * mapToOdom_ *rtabmap::rtabmap_world_T_opengl_world;
+							arViewMatrix = glm::inverse(rtabmap::glmFromTransform(mapCorrection)*glm::inverse(arViewMatrix));
+						}
+					}
+					if(!visualizingMesh_ && !dataRecorderMode_ && main_scene_.GetCameraType() == tango_gl::GestureCamera::kFirstPerson)
+					{
+						rtabmap::CameraModel occlusionModel;
+						cv::Mat occlusionImage = cameraMobile->getOcclusionImage(&occlusionModel);
 
-					if(occlusionModel.isValidForProjection())
-					{
-						pcl::IndicesPtr indices(new std::vector<int>);
-						int meshDecimation = updateMeshDecimation(occlusionImage.cols, occlusionImage.rows);
-						pcl::PointCloud<pcl::PointXYZ>::Ptr cloud = rtabmap::util3d::cloudFromDepth(occlusionImage, occlusionModel, meshDecimation, 0, 0, indices.get());
-						cloud = rtabmap::util3d::transformPointCloud(cloud, rtabmap::opengl_world_T_rtabmap_world*mapToOdom_*occlusionModel.localTransform());
-						occlusionMesh.cloud.reset(new pcl::PointCloud<pcl::PointXYZRGB>());
-						pcl::copyPointCloud(*cloud, *occlusionMesh.cloud);
-						occlusionMesh.indices = indices;
-						occlusionMesh.polygons = rtabmap::util3d::organizedFastMesh(cloud, 1.0*M_PI/180.0, false, meshTrianglePix_);
-					}
-					else if(!occlusionImage.empty())
-					{
-						UERROR("invalid occlusionModel: %f %f %f %f %dx%d", occlusionModel.fx(), occlusionModel.fy(), occlusionModel.cx(), occlusionModel.cy(), occlusionModel.imageWidth(), occlusionModel.imageHeight());
+						if(occlusionModel.isValidForProjection())
+						{
+							pcl::IndicesPtr indices(new std::vector<int>);
+							int meshDecimation = updateMeshDecimation(occlusionImage.cols, occlusionImage.rows);
+							pcl::PointCloud<pcl::PointXYZ>::Ptr cloud = rtabmap::util3d::cloudFromDepth(occlusionImage, occlusionModel, meshDecimation, 0, 0, indices.get());
+							cloud = rtabmap::util3d::transformPointCloud(cloud, rtabmap::opengl_world_T_rtabmap_world*mapToOdom_*occlusionModel.localTransform());
+							occlusionMesh.cloud.reset(new pcl::PointCloud<pcl::PointXYZRGB>());
+							pcl::copyPointCloud(*cloud, *occlusionMesh.cloud);
+							occlusionMesh.indices = indices;
+							occlusionMesh.polygons = rtabmap::util3d::organizedFastMesh(cloud, 1.0*M_PI/180.0, false, meshTrianglePix_);
+						}
+						else if(!occlusionImage.empty())
+						{
+							UERROR("invalid occlusionModel: %f %f %f %f %dx%d", occlusionModel.fx(), occlusionModel.fy(), occlusionModel.cx(), occlusionModel.cy(), occlusionModel.imageWidth(), occlusionModel.imageHeight());
+						}
 					}
 				}
 #ifdef DEBUG_RENDERING_PERFORMANCE
@@ -2630,7 +2655,7 @@ void RTABMapApp::updateMeasuringState()
 
         if(teleportClicked_)
         {
-            camera_->resetOrigin(rtabmap::Transform(-pt.z, -pt.x, pt.y-Scene::kHeightOffset.y,0,0,0));
+            if(cameraDriver_ <= 3) { ((rtabmap::CameraMobile*)camera_)->resetOrigin(rtabmap::Transform(-pt.z, -pt.x, pt.y-Scene::kHeightOffset.y,0,0,0)); }
         }
         else if(addMeasureClicked_) // Add measure
         {
@@ -3234,18 +3259,18 @@ int RTABMapApp::setMappingParameter(const std::string & key, const std::string &
 void RTABMapApp::setGPS(const rtabmap::GPS & gps)
 {
 	boost::mutex::scoped_lock  lock(cameraMutex_);
-	if(camera_!=0)
+	if(camera_!=0 && cameraDriver_ <= 3)
 	{
-		camera_->setGPS(gps);
+		((rtabmap::CameraMobile*)camera_)->setGPS(gps);
 	}
 }
 
 void RTABMapApp::addEnvSensor(int type, float value)
 {
 	boost::mutex::scoped_lock  lock(cameraMutex_);
-	if(camera_!=0)
+	if(camera_!=0 && cameraDriver_ <= 3)
 	{
-		camera_->addEnvSensor(type, value);
+		((rtabmap::CameraMobile*)camera_)->addEnvSensor(type, value);
 	}
 }
 
@@ -4597,10 +4622,11 @@ void RTABMapApp::postOdometryEvent(
 	boost::mutex::scoped_lock  lock(cameraMutex_);
 	if(cameraDriver_ == 3 && camera_)
 	{
+		rtabmap::CameraMobile * cameraMobile = (rtabmap::CameraMobile*)camera_;
         if(pose.isNull())
         {
             // We are lost, trigger a new map on next update
-            camera_->resetOrigin();
+            cameraMobile->resetOrigin();
             return;
         }
 		if(rgb_fx > 0.0f && rgb_fy > 0.0f && rgb_cx > 0.0f && rgb_cy > 0.0f && stamp > 0.0f && yPlane && vPlane && yPlaneLen == rgbWidth*rgbHeight)
@@ -4690,7 +4716,7 @@ void RTABMapApp::postOdometryEvent(
 					pose = rtabmap::rtabmap_world_T_opengl_world * pose * rtabmap::opengl_world_T_rtabmap_world;
 
 					// We should update the pose before querying poses for depth below (if not same stamp than rgb)
-					camera_->poseReceived(pose, stamp);
+					cameraMobile->poseReceived(pose, stamp);
 
 					// Registration depth to rgb
 					if(!outputDepth.empty() && !depthFrame.isNull() && depth_fx!=0 && (rgbFrame != depthFrame || depthStamp!=stamp))
@@ -4703,13 +4729,13 @@ void RTABMapApp::postOdometryEvent(
 							rtabmap::Transform poseRgb;
 							rtabmap::Transform poseDepth;
 							cv::Mat cov;
-							if(!camera_->getPose(camera_->getStampEpochOffset()+stamp, poseRgb, cov, 0.0))
+							if(!cameraMobile->getPose(cameraMobile->getStampEpochOffset()+stamp, poseRgb, cov, 0.0))
 							{
-								UERROR("Could not find pose at rgb stamp %f (epoch %f)!", stamp, camera_->getStampEpochOffset()+stamp);
+								UERROR("Could not find pose at rgb stamp %f (epoch %f)!", stamp, cameraMobile->getStampEpochOffset()+stamp);
 							}
-							else if(!camera_->getPose(camera_->getStampEpochOffset()+depthStamp, poseDepth, cov, 0.0))
+							else if(!cameraMobile->getPose(cameraMobile->getStampEpochOffset()+depthStamp, poseDepth, cov, 0.0))
 							{
-								UERROR("Could not find pose at depth stamp %f (epoch %f) last rgb is %f!", depthStamp, camera_->getStampEpochOffset()+depthStamp, stamp);
+								UERROR("Could not find pose at depth stamp %f (epoch %f) last rgb is %f!", depthStamp, cameraMobile->getStampEpochOffset()+depthStamp, stamp);
 							}
 							else
 							{
@@ -4746,7 +4772,7 @@ void RTABMapApp::postOdometryEvent(
 #endif
 					}
 
-					rtabmap::CameraModel model = rtabmap::CameraModel(rgb_fx, rgb_fy, rgb_cx, rgb_cy, camera_->getDeviceTColorCamera(), 0, cv::Size(rgbWidth, rgbHeight));
+					rtabmap::CameraModel model = rtabmap::CameraModel(rgb_fx, rgb_fy, rgb_cx, rgb_cy, cameraMobile->getDeviceTColorCamera(), 0, cv::Size(rgbWidth, rgbHeight));
 #ifndef DISABLE_LOG
 					//LOGI("pointCloudData size=%d", pointsLen);
 #endif
@@ -4778,7 +4804,7 @@ void RTABMapApp::postOdometryEvent(
                     {
                         rtabmap::CameraModel depthModel = model.scaled(float(outputDepth.cols) / float(model.imageWidth()));
                         depthModel.setLocalTransform(pose*model.localTransform());
-                        camera_->setOcclusionImage(outputDepth, depthModel);
+                        cameraMobile->setOcclusionImage(outputDepth, depthModel);
                     }
 
 					rtabmap::SensorData data(scan, outputRGB, outputDepth, outputDepthConfidence, model, 0, stamp);
@@ -4801,7 +4827,7 @@ void RTABMapApp::postOdometryEvent(
                     texCoords[5] = t5;
                     texCoords[6] = t6;
                     texCoords[7] = t7;
-					camera_->update(data, pose, viewMatrixMat, projectionMatrix, main_scene_.GetCameraType() == tango_gl::GestureCamera::kFirstPerson?texCoords:0);
+					cameraMobile->update(data, pose, viewMatrixMat, projectionMatrix, main_scene_.GetCameraType() == tango_gl::GestureCamera::kFirstPerson?texCoords:0);
 				}
 			}
 		}
@@ -5099,4 +5125,3 @@ bool RTABMapApp::handleEvent(UEvent * event)
 	}
 	return false;
 }
-

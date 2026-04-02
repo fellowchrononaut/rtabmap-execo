@@ -390,6 +390,7 @@
         <item>"ARCore NDK"</item>
         <item>"AREngine NDK"</item>
         <item>"ARCore Java"</item>
+        <item>"RealSense2 (USB)"</item>
     </string-array>
     <string-array name="pref_camera_driver_values">
         <item>"-1"</item>
@@ -397,6 +398,7 @@
         <item>"1"</item>
         <item>"2"</item>
         <item>"3"</item>
+        <item>"4"</item>
     </string-array>
     <string-array name="pref_update_rate_keys">
         <item>"Max"</item>

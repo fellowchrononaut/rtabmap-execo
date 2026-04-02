@@ -100,6 +100,7 @@ import android.widget.ToggleButton;
 import com.google.ar.core.ArCoreApk;
 import com.google.atap.tangoservice.Tango;
 import com.huawei.hiar.AREnginesApk;
+import com.intel.realsense.librealsense.RsContext;
 
 
 // The main activity of the application. This activity shows debug information
@@ -1432,6 +1433,38 @@ public class RTABMapActivity extends FragmentActivity implements OnClickListener
 					});
 				}
 			});
+			bindThread.start();
+		}
+		else if(mCameraDriver == 4)
+		{
+			// RealSense2: initialize USB context so librealsense2 can find the device,
+			// then start the camera on a background thread.
+			RsContext.init(getApplicationContext());
+			Thread bindThread = new Thread(new Runnable() {
+				public void run() {
+					// Give the USB permission dialog a moment to be granted if needed.
+					try { Thread.sleep(500); } catch (InterruptedException e) {}
+					final boolean cameraStartSuccess = RTABMapLib.startCamera(nativeApplication, null, getApplicationContext(), getActivity(), mCameraDriver);
+					runOnUiThread(new Runnable() {
+						public void run() {
+							mProgressDialog.dismiss();
+							if (!cameraStartSuccess) {
+								mToast.makeText(getApplicationContext(),
+										"Failed to initialize RealSense2 camera! Make sure the camera is connected via USB and permission was granted.",
+										mToast.LENGTH_LONG).show();
+							} else {
+								updateState(mState == State.STATE_VISUALIZING ? State.STATE_VISUALIZING_CAMERA : State.STATE_CAMERA);
+								if (mState == State.STATE_VISUALIZING_CAMERA && mItemLocalizationMode.isChecked()) {
+									RTABMapLib.setPausedMapping(nativeApplication, false);
+								}
+							}
+						}
+					});
+				}
+			});
+			mProgressDialog.setTitle("");
+			mProgressDialog.setMessage(message);
+			mProgressDialog.show();
 			bindThread.start();
 		}
 		else

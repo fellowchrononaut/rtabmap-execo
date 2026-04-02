@@ -116,6 +116,28 @@ IF(AREngine_FOUND)
     
 ENDIF(AREngine_FOUND)
 
+IF(RealSense2_FOUND)
+
+  SET(INCLUDE_DIRS
+    ${INCLUDE_DIRS}
+    ${RealSense2_INCLUDE_DIRS}
+  )
+
+  # Use an imported target so CMake knows the exact path to the prebuilt .so
+  add_library(realsense2 SHARED IMPORTED)
+  set_target_properties(realsense2 PROPERTIES
+    IMPORTED_LOCATION ${RealSense2_LIBRARIES})
+
+  SET(LIBRARIES
+    ${LIBRARIES}
+    realsense2
+  )
+
+  file(COPY ${RealSense2_LIBRARIES}
+       DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/../libs/${ANDROID_NDK_ABI_NAME})
+
+ENDIF(RealSense2_FOUND)
+
 add_definitions(${PCL_DEFINITIONS})
 
 INCLUDE_DIRECTORIES(${INCLUDE_DIRS})

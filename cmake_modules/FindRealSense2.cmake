@@ -9,11 +9,24 @@
 
 #RealSense library
 
-find_path(RealSense2_INCLUDE_DIRS NAMES librealsense2/rs.hpp PATHS $ENV{RealSense2_ROOT_DIR}/include)
-if(CMAKE_CL_64)
-find_library(RealSense2_LIBRARY NAMES realsense2 PATHS $ENV{RealSense2_ROOT_DIR}/lib $ENV{RealSense2_ROOT_DIR}/lib/x64  $ENV{RealSense2_ROOT_DIR}/bin $ENV{RealSense2_ROOT_DIR}/bin/x64)
+find_path(RealSense2_INCLUDE_DIRS NAMES librealsense2/rs.hpp
+  PATHS
+    ${RealSense2_ROOT_DIR}/include
+    $ENV{RealSense2_ROOT_DIR}/include)
+if(ANDROID)
+find_library(RealSense2_LIBRARY NAMES realsense2
+  PATHS
+    ${RealSense2_ROOT_DIR}/wrappers/android/build/jniLibs/${ANDROID_NDK_ABI_NAME}
+    $ENV{RealSense2_ROOT_DIR}/wrappers/android/build/jniLibs/${ANDROID_NDK_ABI_NAME}
+    ${RealSense2_ROOT_DIR}/wrappers/android/jniLibs/${ANDROID_NDK_ABI_NAME}
+    $ENV{RealSense2_ROOT_DIR}/wrappers/android/jniLibs/${ANDROID_NDK_ABI_NAME}
+    ${RealSense2_ROOT_DIR}/lib/${ANDROID_NDK_ABI_NAME}
+    $ENV{RealSense2_ROOT_DIR}/lib/${ANDROID_NDK_ABI_NAME}
+  NO_CMAKE_FIND_ROOT_PATH)
+elseif(CMAKE_CL_64)
+find_library(RealSense2_LIBRARY NAMES realsense2 PATHS ${RealSense2_ROOT_DIR}/lib $ENV{RealSense2_ROOT_DIR}/lib ${RealSense2_ROOT_DIR}/lib/x64 $ENV{RealSense2_ROOT_DIR}/lib/x64 $ENV{RealSense2_ROOT_DIR}/bin $ENV{RealSense2_ROOT_DIR}/bin/x64)
 else()
-find_library(RealSense2_LIBRARY NAMES realsense2 PATHS $ENV{RealSense2_ROOT_DIR}/lib $ENV{RealSense2_ROOT_DIR}/lib/x86  $ENV{RealSense2_ROOT_DIR}/bin $ENV{RealSense2_ROOT_DIR}/bin/x86)
+find_library(RealSense2_LIBRARY NAMES realsense2 PATHS ${RealSense2_ROOT_DIR}/lib $ENV{RealSense2_ROOT_DIR}/lib ${RealSense2_ROOT_DIR}/lib/x86 $ENV{RealSense2_ROOT_DIR}/lib/x86 $ENV{RealSense2_ROOT_DIR}/bin $ENV{RealSense2_ROOT_DIR}/bin/x86)
 endif()
 
 IF (RealSense2_INCLUDE_DIRS AND RealSense2_LIBRARY)
