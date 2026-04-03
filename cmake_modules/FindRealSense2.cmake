@@ -12,7 +12,8 @@
 find_path(RealSense2_INCLUDE_DIRS NAMES librealsense2/rs.hpp
   PATHS
     ${RealSense2_ROOT_DIR}/include
-    $ENV{RealSense2_ROOT_DIR}/include)
+    $ENV{RealSense2_ROOT_DIR}/include
+  NO_CMAKE_FIND_ROOT_PATH)
 if(ANDROID)
 find_library(RealSense2_LIBRARY NAMES realsense2
   PATHS
@@ -35,11 +36,19 @@ ENDIF (RealSense2_INCLUDE_DIRS AND RealSense2_LIBRARY)
 
 IF (RealSense2_FOUND)
    SET(RealSense2_LIBRARIES ${RealSense2_LIBRARY})
-   
+
    # Compatibility with linux names
    SET(realsense2_LIBRARIES ${RealSense2_LIBRARIES})
    SET(realsense2_INCLUDE_DIRS ${RealSense2_INCLUDE_DIRS})
    SET(realsense2_FOUND ${RealSense2_FOUND})
+
+   # Create imported target realsense2::realsense2 as expected by corelib on Linux/Android
+   IF(NOT TARGET realsense2::realsense2)
+     add_library(realsense2::realsense2 SHARED IMPORTED)
+     set_target_properties(realsense2::realsense2 PROPERTIES
+       IMPORTED_LOCATION "${RealSense2_LIBRARY}"
+       INTERFACE_INCLUDE_DIRECTORIES "${RealSense2_INCLUDE_DIRS}")
+   ENDIF()
   
    # show which RealSense was found only if not quiet
    IF (NOT RealSense2_FIND_QUIETLY)

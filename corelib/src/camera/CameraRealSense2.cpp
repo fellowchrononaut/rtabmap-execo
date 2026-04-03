@@ -40,6 +40,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fstream>
 #endif
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#define RS2_LOG(fmt, ...) __android_log_print(ANDROID_LOG_INFO, "rtabmap_rs2", fmt, ##__VA_ARGS__)
+#else
+#define RS2_LOG(fmt, ...)
+#endif
+
 namespace rtabmap
 {
 
@@ -196,6 +203,7 @@ void CameraRealSense2::pose_callback(rs2::frame frame)
 void CameraRealSense2::frame_callback(rs2::frame frame)
 {
 	//UDEBUG("Frame callback! %f", frame.get_timestamp());
+	RS2_LOG("frame_callback: stream=%s type=%d", frame.get_profile().stream_name().c_str(), (int)frame.get_profile().stream_type());
 	syncer_(frame);
 }
 void CameraRealSense2::multiple_message_callback(rs2::frame frame)
@@ -1296,11 +1304,13 @@ SensorData CameraRealSense2::captureImage(SensorCaptureInfo * info)
 		auto frameset = syncer_.wait_for_frames(5000);
 		UTimer timer;
 		int desiredFramesetSize = 2;
+		RS2_LOG("captureImage: initial frameset.size()=%d desired=%d", (int)frameset.size(), desiredFramesetSize);
 		while ((int)frameset.size() != desiredFramesetSize && timer.elapsed() < 2.0)
 		{
 			// maybe there is a latency with the USB, try again in 100 ms (for the next 2 seconds)
 			frameset = syncer_.wait_for_frames(100);
 		}
+		RS2_LOG("captureImage: final frameset.size()=%d desired=%d elapsed=%.2f", (int)frameset.size(), desiredFramesetSize, timer.elapsed());
 		if ((int)frameset.size() == desiredFramesetSize)
 		{
 			double now = UTimer::now();
@@ -1437,6 +1447,10 @@ SensorData CameraRealSense2::captureImage(SensorCaptureInfo * info)
 				{
 					data = SensorData(bgr, depth, model_, this->getNextSeqID(), stamp);
 				}
+				RS2_LOG("SensorData created: bgr=%dx%d depth=%dx%d model_valid=%d fx=%.1f fy=%.1f cx=%.1f cy=%.1f",
+					bgr.cols, bgr.rows, depth.cols, depth.rows,
+					(int)model_.isValidForProjection(),
+					model_.fx(), model_.fy(), model_.cx(), model_.cy());
 			}
 			else if(is_left_fisheye_arrived)
 			{
@@ -1566,11 +1580,13 @@ SensorData CameraRealSense2::captureImage(SensorCaptureInfo * info)
 		else
 		{
 			UERROR("Missing frames (received %d, needed=%d)", (int)frameset.size(), desiredFramesetSize);
+			RS2_LOG("captureImage MISMATCH: received=%d needed=%d", (int)frameset.size(), desiredFramesetSize);
 			if(frameset.size()>0)
 			{
 				for (auto it = frameset.begin(); it != frameset.end(); ++it)
 				{
 					UERROR("Received frame only from %s", (*it).get_profile().stream_name().c_str());
+					RS2_LOG("captureImage: stream in frameset: %s (type=%d)", (*it).get_profile().stream_name().c_str(), (int)(*it).get_profile().stream_type());
 				}
 			}
 		}

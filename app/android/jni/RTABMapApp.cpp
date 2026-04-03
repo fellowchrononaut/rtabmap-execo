@@ -43,6 +43,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 #ifdef RTABMAP_REALSENSE2
 #include <rtabmap/core/camera/CameraRealSense2.h>
+#include <rtabmap/core/Odometry.h>
 #endif
 
 #include <rtabmap/core/Rtabmap.h>
@@ -96,7 +97,6 @@ static jobject RTABMapActivity = 0;
 #endif
 
 #ifdef __ANDROID__
-#ifndef DISABLE_LOG
 //ref: https://codelab.wordpress.com/2014/11/03/how-to-use-standard-output-streams-for-logging-in-android-apps/
 static int pfd[2];
 static pthread_t thr;
@@ -129,7 +129,6 @@ int start_logger()
     pthread_detach(thr);
     return 0;
 }
-#endif
 #endif
 
 rtabmap::ParametersMap RTABMapApp::getRtabmapParameters()
@@ -226,6 +225,7 @@ RTABMapApp::RTABMapApp() :
 		cameraDriver_(0),
 		camera_(0),
 		sensorCaptureThread_(0),
+		odomThread_(0),
 		rtabmapThread_(0),
 		rtabmap_(0),
 		logHandler_(0),
@@ -332,9 +332,7 @@ RTABMapApp::RTABMapApp() :
 	LOGI("RTABMapApp::RTABMapApp() end");
 
 #ifdef __ANDROID__
-#ifndef DISABLE_LOG
 	start_logger();
-#endif
 #endif
 }
 
@@ -1071,6 +1069,16 @@ bool RTABMapApp::startCamera()
 		{
 			sensorCaptureThread_ = new rtabmap::SensorCaptureThread(camera_);
 		}
+#ifdef RTABMAP_REALSENSE2
+		if(cameraDriver_ == 4)
+		{
+			odomThread_ = new rtabmap::OdometryThread(rtabmap::Odometry::create());
+			UEventsManager::addHandler(odomThread_);
+			UEventsManager::createPipe(sensorCaptureThread_, odomThread_, "SensorEvent");
+			UEventsManager::createPipe(sensorCaptureThread_, this, "SensorEvent");
+			odomThread_->start();
+		}
+#endif
 		sensorCaptureThread_->start();
 		return true;
 	}
@@ -1093,6 +1101,13 @@ void RTABMapApp::stopCamera()
 			delete sensorCaptureThread_; // camera_ is closed and deleted inside
 			sensorCaptureThread_ = 0;
 			camera_ = 0;
+		}
+		if(odomThread_ != 0)
+		{
+			UEventsManager::removeHandler(odomThread_);
+			odomThread_->join(true);
+			delete odomThread_;
+			odomThread_ = 0;
 		}
 	}
     {

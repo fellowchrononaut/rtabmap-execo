@@ -123,6 +123,8 @@ IF(RealSense2_FOUND)
     ${RealSense2_INCLUDE_DIRS}
   )
 
+  add_definitions(-DRTABMAP_REALSENSE2)
+
   # Use an imported target so CMake knows the exact path to the prebuilt .so
   add_library(realsense2 SHARED IMPORTED)
   set_target_properties(realsense2 PROPERTIES

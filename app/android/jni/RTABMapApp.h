@@ -42,6 +42,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <rtabmap/core/SensorCaptureThread.h>
 #include <rtabmap/core/RtabmapThread.h>
+#include <rtabmap/core/OdometryThread.h>
 #include <rtabmap/core/SensorEvent.h>
 #include <rtabmap/utilite/UEventsHandler.h>
 #include <boost/thread/mutex.hpp>
@@ -225,6 +226,7 @@ class RTABMapApp : public UEventsHandler {
   int cameraDriver_;
   rtabmap::Camera * camera_;
   rtabmap::SensorCaptureThread * sensorCaptureThread_;
+  rtabmap::OdometryThread * odomThread_;
   rtabmap::RtabmapThread * rtabmapThread_;
   rtabmap::Rtabmap * rtabmap_;
   rtabmap::LogHandler * logHandler_;
